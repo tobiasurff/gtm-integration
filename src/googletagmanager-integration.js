@@ -1,37 +1,58 @@
 /**
- * The integration object is modified to integrate with Google Analytics.
+ * The integration object is modified to integrate with Google Tag Manager's dataLayer.
  */
-window.integration = {
+window.optimizelyGtmIntegration = {
     /**
-     * This function sets a custom variable on Google Analytics for every experiment
+     * This function pushes experiment information to the GTM dataLayer objectfor every experiment
      * that is active on this page.The function is called for all active experiments,
      * including any redirect experiments that might have been running on a previous
      * page.
      *
      * @param {string} experimentId
-     * @param {string} variationId
+     * @param {array} variationIds
      */
     makeRequest: function(experimentId, variationIds) {
-        var slot = 2;
-        var keyValue = window.integrator.makeSendableNames(experimentId, variationIds, 255, 255, 255, false, "test");
 
-        window["_gaq"].push(["_setCustomVar", slot, keyValue.key, keyValue.value, 2]);
+        // Get compliant strings for experiment description and variations
+        var sendableNames = window.integrator.makeSendableNames(experimentId, variationIds, 255,
+            255, 255, false, "");
+
+        // Prep object to push into dataLayer
+        var optimizely = {
+            experiments: {}
+        };
+
+        optimizely.experiments[experimentId] = {
+            variationIds: variationIds,
+            description: sendableNames.key,
+            variations: sendableNames.value,
+            combinedLabel: sendableNames.key + ' (' + experimentId + '): ' + sendableNames.value
+        };
+
+        // Push object with experiement information together with event
+        window.dataLayer = window.dataLayer || [];
+        dataLayer.push({
+            'optimizely': optimizely,
+            'event': 'optimizelyExperimentActivated'
+        });
+
     },
 
     /**
      * This function makes sure that the correct referrer value is send
-     * to Google Analytics. If a redirect experiment has happend, the
+     * as a variable to  GTM. If a redirect experiment has happened, the
      * referrer value needs to be used from the previous page. The
      * referrer value is stored in a redirect cookie. This function
      * is only called once for every page.
      */
     initialize: function() {
-        window["_gaq"] = window["_gaq"] || [];
 
-        var referrer = window.integrator.redirect.getRedirectReferrer();
-        if (referrer !== null) {
-            window["_gaq"].push(['_setReferrerOverride', referrer]);
-        }
+        var referrer = window.integrator.redirect.getRedirectReferrer() || document.referrer;
+        window.dataLayer = window.dataLayer || [];
+        dataLayer.push({
+            "optimizelyAdjustedForRedirectReferrer": referrer
+        });
+
     }
 };
 
@@ -250,7 +271,7 @@ window.integrator = {
             varNamesArray.push(window.optimizely.data.variations[variationId].name);
         }
         if (variationIds.length > 1) {
-            varNamesArray = $.map(varNamesArray, (function(str) {
+            varNamesArray = optimizely.$.map(varNamesArray, (function(str) {
                 return str.substr(0, mvtVarLength - 1);
             }));
             varName = varNamesArray.join("~");
@@ -286,4 +307,4 @@ window.integrator = {
         }
     }
 
-})(window.optimizely, window.console, window.integrator, window.integration);
+})(window.optimizely, window.console, window.integrator, window.optimizelyGtmIntegration);
